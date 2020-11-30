@@ -1,4 +1,12 @@
-## Task 1
+# AIT : Labo 03 - Load balancing
+
+> Author : Gil Balsiger & Julien Béguin
+>
+> Date : 30.11.2020
+
+
+
+## Task 1: Install the tools
 
 > Explain how the load balancer behaves when you open and refresh the URL http://192.168.42.42 in your browser. Add screenshots to complement your explanations. We expect that you take a deeper a look at session management.
 
@@ -63,7 +71,7 @@ h->b: {hello: "world!",...}
 
 
 
-## Task 2
+## Task 2: Sticky sessions
 
 > There is different way to implement the sticky session. One possibility is to use the SERVERID provided by HAProxy. Another way is to use the  NODESESSID provided by the application. Briefly explain the difference between both approaches (provide a sequence diagram with cookies to show the difference).
 
@@ -157,7 +165,9 @@ We can see all requests reached the server S1 while, in task 1, requests were sp
 
 The load-balancer choose a server for the first thread (user) and keep reaching the same server for this user for the next requests (999). Same for the second user. In this case, the second server is chosen and kept for all future requests (999). That's why there are 1000 requests for each server.
 
-## Task 3
+
+
+## Task 3: Drain mode
 
 > Take a screenshot of the Step 5 and tell us which node is answering.
 
@@ -222,3 +232,99 @@ Even already established sessions are ignored and all traffic is redirected to S
 Request on another browser :
 
 ![](./screens/screen18.png)
+
+
+
+## Task 4: Round robin in degraded mode
+
+> 1. Make sure a delay of 0 milliseconds is set on `s1`. Do a run to have a baseline to compare with in the next experiments.
+
+Reset delay on `s1` :
+
+```bash
+curl -H "Content-Type: application/json" -X POST -d '{"delay": 0}' http://192.168.42.11:3000/delay
+```
+
+JMeter result :
+
+![](./screens/screen19.png)
+
+
+
+> 2. Set a delay of 250 milliseconds on `s1`. Relaunch a run with the JMeter script and explain what is happening.
+
+Set delay on `s1` :
+
+```bash
+curl -H "Content-Type: application/json" -X POST -d '{"delay": 250}' http://192.168.42.11:3000/delay
+```
+
+JMeter result :
+
+![](./screens/screen20.png)
+
+As expected, `s1` is much slower to answer as we can see on the *Throughput* column. `s1` served **3.3** requests per second while `s2` served **86.2** requests per sec.
+
+Requests are still distributed between between `s1` and `s2`. 
+
+
+
+> 3. Set a delay of 2500 milliseconds on `s1`. Same than previous step.
+
+```bash
+curl -H "Content-Type: application/json" -X POST -d '{"delay": 2500}' http://192.168.42.11:3000/delay
+```
+
+JMeter result :
+
+![](./screens/screen21.png)
+
+This time, only 2 requests reached `s1`. This is due to the load-balancer checking backend server's health.
+
+The load-balancer frequently check backend's health and must have considered `s1` unhealthy by his overly slow response. If `s1` is considered unhealthy, it is removed from the pool of backend until it is healthy again. Meanwhile, all traffic is redirected to `s2`.
+
+
+
+> 4. In the two previous steps, are there any errors? Why?
+
+No because the load-balancer did his job. When it detected that `s1` was an unhealthy backend, he removed it from the pool and redirected all traffic to an healthy backend, `s2`. This way, no request add an error.
+
+
+
+> 5. Update the HAProxy configuration to add a weight to your nodes. For that, add `weight [1-256]` where the value of weight is between the two values (inclusive). Set `s1` to 2 and `s2` to 1. Redo a run with a 250ms delay.
+
+Edit `haproxy.cfg` :
+
+```
+    server s1 ${WEBAPP_1_IP}:3000 check cookie s1 weight 2
+    server s2 ${WEBAPP_2_IP}:3000 check cookie s2 weight 1
+```
+
+And rebuild the containers.
+
+Set delay : 
+
+```bash
+curl -H "Content-Type: application/json" -X POST -d '{"delay": 250}' http://192.168.42.11:3000/delay
+```
+
+JMeter result :
+
+![](./screens/screen22.png)
+
+As we can see on the result, there is no real difference with or without the weight. Requests are still served evenly between `s1` and `s2`.  This is due to the sticky session policy.
+
+
+
+> 6. Now, what happens when the cookies are cleared between each request and the delay is set to 250ms? We expect just one or two sentence to summarize your observations of the behavior with/without cookies.
+
+JMeter result :
+
+![](./screens/screen23.png)
+
+Now that session are cleared between each request, the sticky session has no effect. This way, the weight policy take effect. That's why `s1` was reached two third of the time (1334 req.) and `s2` was reached one third of the time (666 req.)
+
+
+
+## Task 5: Balancing strategies
+
