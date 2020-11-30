@@ -156,3 +156,69 @@ We can see all requests reached the server S1 while, in task 1, requests were sp
 ![](./screens/screen08.png)
 
 The load-balancer choose a server for the first thread (user) and keep reaching the same server for this user for the next requests (999). Same for the second user. In this case, the second server is chosen and kept for all future requests (999). That's why there are 1000 requests for each server.
+
+## Task 3
+
+> Take a screenshot of the Step 5 and tell us which node is answering.
+
+![](./screens/screen09.png)
+
+S2 is answering for the moment.
+
+> Based on your previous answer, set the node in DRAIN mode. Take a screenshot of the HAProxy state page.
+
+```powershell
+> set server nodes/s2 state drain
+```
+
+![](./screens/screen10.png)
+
+> Refresh your browser and explain what is happening. Tell us if you stay on the same node or not. If yes, why? If no, why?
+
+![](./screens/screen11.png)
+
+We can see we still reach S2 because, as explained in the README, DRAIN mode only prevent new connections on S2 but already established sessions are still authorized.
+
+> Open another browser and open `http://192.168.42.42`. What is happening?
+
+![](./screens/screen12.png)
+
+We reach the node S1 which isn't in drain mode.
+
+> Clear the cookies on the new browser and repeat these two steps multiple times. What is happening? Are you reaching the node in DRAIN mode?
+
+![](./screens/screen13.png)
+
+We can see it's a new session because the id is different. We still reach S1. We do not reach the DRAIN node anymore for new sessions.
+
+> Reset the node in READY mode. Repeat the three previous steps and explain what is happening. Provide a screenshot of HAProxy's stats page.
+
+```shell
+> set server nodes/s2 state ready
+```
+
+Request in a new browser :
+
+![](./screens/screen14.png)
+
+After clearing the cookies :
+
+![](./screens/screen15.png)
+
+We can reach S2 again with new session because it's back in ready mode.
+
+> Finally, set the node in MAINT mode. Redo the three same steps and explain what is happening. Provide a screenshot of HAProxy's stats page.
+
+```
+> set server nodes/s2 state maint
+```
+
+![](./screens/screen16.png)
+
+Even already established sessions are ignored and all traffic is redirected to S1, the only active node.
+
+![](./screens/screen17.png)
+
+Request on another browser :
+
+![](./screens/screen18.png)
