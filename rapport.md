@@ -328,3 +328,96 @@ Now that session are cleared between each request, the sticky session has no eff
 
 ## Task 5: Balancing strategies
 
+> 1. Briefly explain the strategies you have chosen and why you have chosen them.
+
+- **leastconn** : The load-balancer will route the request to the server that currently have the least number of connection. If multiple server have the same amount of connections, round-robin is performed to ensure that all servers will be used. This mode is particularly adapted with long session so this can be interesting to test with our backend using long delays.
+- **first** : 
+
+> 2. Provide evidence that you have played with the two strategies (configuration done, screenshots, ...)
+
+### **leastconn :**
+
+Edit `haproxy.cfg`, add `balance leastconn` :
+
+```
+...
+backend nodes
+    # Define the protocol accepted
+    # http://cbonte.github.io/haproxy-dconv/2.2/configuration.html#4-mode
+    mode http
+
+    # Define the way the backend nodes are checked to know if they are alive or down
+    # http://cbonte.github.io/haproxy-dconv/2.2/configuration.html#4-option%20httpchk
+    option httpchk HEAD /
+
+    # Define the balancing policy
+    # http://cbonte.github.io/haproxy-dconv/2.2/configuration.html#balance
+    balance leastconn
+
+    # Automatically add the X-Forwarded-For header
+    # http://cbonte.github.io/haproxy-dconv/2.2/configuration.html#4-option%20forwardfor
+    # https://en.wikipedia.org/wiki/X-Forwarded-For
+    option forwardfor
+
+    # With this config, we add the header X-Forwarded-Port
+    # http://cbonte.github.io/haproxy-dconv/2.2/configuration.html#4-http-request
+    http-request set-header X-Forwarded-Port %[dst_port]
+
+    # Define the list of nodes to be in the balancing mechanism
+    # http://cbonte.github.io/haproxy-dconv/2.2/configuration.html#4-server
+    server s1 ${WEBAPP_1_IP}:3000 check
+    server s2 ${WEBAPP_2_IP}:3000 check
+```
+
+Rebuild the containers to apply config.
+
+
+
+Let's try to make some request to the load-balancer :
+
+```bash
+❯ curl 192.168.42.42
+{"hello":"world!","ip":"192.168.42.11",...}
+
+❯ curl 192.168.42.42
+{"hello":"world!","ip":"192.168.42.22",...}
+
+❯ curl 192.168.42.42
+{"hello":"world!","ip":"192.168.42.11",...}
+
+❯ curl 192.168.42.42
+{"hello":"world!","ip":"192.168.42.22",...}
+```
+
+In this case, requests are executed one at a time so the number of connection on each beckend is equal to 0. Since the number of connection is the same, the requests are routed in a round-robin fashion.
+
+
+
+We can test this with parallelized request with JMeter :
+
+No delay :
+
+![](./screens/screen24.png)
+
+250ms delay :
+
+![](./screens/screen25.png)
+
+500ms delay :
+
+![](./screens/screen27.png)
+
+2500ms delay :
+
+![](./screens/screen26.png)
+
+Without delay, the number of reach is pretty similar between `s1` and `s2` but when `s1` start to get some delay (250ms), more requests are routed to `s2`. This is because the connection accumulate on `s1` and therefore `s2` is selected by the load-balancer.
+
+With more delay (500ms), even more request are routed to `s2` and same as before, when the delay is too long (2500ms), the backend is considered unhealthy and removed from the pool.
+
+
+
+> 3. Compare the two strategies and conclude which is the best for this lab (not necessary the best at all).
+
+- **leastconn** : This method is well adapted to long session because the load-balancer adapt the routing by the loads of the session instead of the number of sessions. This way, if a backend get a very heavy/long session, he will get less session to compensate the load.
+- **first** : 
