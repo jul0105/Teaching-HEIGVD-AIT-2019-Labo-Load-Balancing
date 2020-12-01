@@ -6,6 +6,21 @@
 
 
 
+## Introduction
+
+The purpose of this laboratory is to take a look at HAProxy and to experiment multiple configuration on this load-balancer. Additionally, we will use JMeter to test and verify that out configuration works properly under load.
+
+**Summary :**
+
+1. round-robin balance mode
+2. sticky session management
+3. drain mode (node management)
+4. unhealthy node management
+5. leastconn balance mode
+6. first balance mode
+
+
+
 ## Task 1: Install the tools
 
 > Explain how the load balancer behaves when you open and refresh the URL http://192.168.42.42 in your browser. Add screenshots to complement your explanations. We expect that you take a deeper a look at session management.
@@ -335,7 +350,7 @@ Now that session are cleared between each request, the sticky session has no eff
 
 > 2. Provide evidence that you have played with the two strategies (configuration done, screenshots, ...)
 
-### Method <u>leastconn</u> :
+#### Method <u>leastconn</u> :
 
 Edit `haproxy.cfg`. Add `balance leastconn` :
 
@@ -417,7 +432,7 @@ With more delay (500ms), even more request are routed to `s2` and same as before
 
 
 
-### Method <u>first</u> :
+#### Method <u>first</u> :
 
 Edit `haproxy.cfg`. Add `balance first` and `maxconn` :
 
@@ -528,4 +543,12 @@ On the other hand, **leastconn** fit well with the addition of delays because it
 On non-delayed requests, **leastconn** act just like **round-robin** and get the same performances.
 
 Overall, this make **leastconn** the best balancing method for this lab.
+
+
+
+## Conclusion
+
+Before this lab, we only used one load-balancer, *traefik*. This lab was interesting because we could experiment HAProxy and so make some comparisons with traefix. HAProxy is more complex to configure but is more feature-rich. For example, it provide a large number of different balancing mode where traefix is limited to round-robin. On the other hand, traefix is easier to setup and allow auto discovery with containers manager but is more limited as a load-balancer.
+
+Personally, we prefer to use traefix for its ease of use but it was interesting to experiment HAProxy which is a well-used load-balancer on the industry.
 
