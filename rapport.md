@@ -335,9 +335,9 @@ Now that session are cleared between each request, the sticky session has no eff
 
 > 2. Provide evidence that you have played with the two strategies (configuration done, screenshots, ...)
 
-### **leastconn :**
+### Method <u>leastconn</u> :
 
-Edit `haproxy.cfg`, add `balance leastconn` :
+Edit `haproxy.cfg`. Add `balance leastconn` :
 
 ```
 ...
@@ -393,7 +393,7 @@ In this case, requests are executed one at a time so the number of connection on
 
 
 
-We can test this with parallelized request with JMeter :
+We can test this configuration with JMeter :
 
 No delay :
 
@@ -417,7 +417,115 @@ With more delay (500ms), even more request are routed to `s2` and same as before
 
 
 
+### Method <u>first</u> :
+
+Edit `haproxy.cfg`. Add `balance first` and `maxconn` :
+
+```
+... 
+backend nodes
+    # Define the protocol accepted
+    # http://cbonte.github.io/haproxy-dconv/2.2/configuration.html#4-mode
+    mode http
+
+    # Define the way the backend nodes are checked to know if they are alive or down
+    # http://cbonte.github.io/haproxy-dconv/2.2/configuration.html#4-option%20httpchk
+    option httpchk HEAD /
+
+    # Define the balancing policy
+    # http://cbonte.github.io/haproxy-dconv/2.2/configuration.html#balance
+    balance first
+
+    # Automatically add the X-Forwarded-For header
+    # http://cbonte.github.io/haproxy-dconv/2.2/configuration.html#4-option%20forwardfor
+    # https://en.wikipedia.org/wiki/X-Forwarded-For
+    option forwardfor
+
+    # With this config, we add the header X-Forwarded-Port
+    # http://cbonte.github.io/haproxy-dconv/2.2/configuration.html#4-http-request
+    http-request set-header X-Forwarded-Port %[dst_port]
+
+    # Define the list of nodes to be in the balancing mechanism
+    # http://cbonte.github.io/haproxy-dconv/2.2/configuration.html#4-server
+    server s1 ${WEBAPP_1_IP}:3000 check maxconn 5
+    server s2 ${WEBAPP_2_IP}:3000 check maxconn 5
+```
+
+Rebuild the containers to apply config.
+
+
+
+Let's try to make some request to the load-balancer :
+
+```bash
+❯ curl 192.168.42.42
+{"hello":"world!","ip":"192.168.42.11",...}
+
+❯ curl 192.168.42.42
+{"hello":"world!","ip":"192.168.42.11",...}
+
+❯ curl 192.168.42.42
+{"hello":"world!","ip":"192.168.42.11",...}
+
+...
+
+❯ curl 192.168.42.42
+{"hello":"world!","ip":"192.168.42.11",...}
+```
+
+In this case, requests are executed one at a time so when a new request arrives at the load-balancer, the number of active connection is always equal to 0. Since the number of connection never exceed the maxconn parameter (which is 5), all requests are routed to `s1`.
+
+
+
+We can test this configuration with JMeter :
+
+No delay :
+
+![](./screens/screen28.png)
+
+In this case, all requests are treated instantly so the number of active session never exceed the maxconn.
+
+However, when we add 250ms of delay to `s1`, the result is still the same be much slower. After investigation on the HAProxy stats interface, we realised that backend servers seems to not be multi-threaded. This means that multiple requests cannot be treated at the same time on the same backend server. This also means that the maxconn of 5 will never be met as the number of active connection can only be 0 or 1.
+
+With all that, we learnt that the *first* balance method is definitely not fitted for our application but let's try to continue the tests by lowering the maxconn value of each backend server to 1 :
+
+```
+    server s1 ${WEBAPP_1_IP}:3000 check maxconn 1
+    server s2 ${WEBAPP_2_IP}:3000 check maxconn 1
+```
+
+This should allow `s2` to be reached.
+
+
+
+Test with JMeter with no delay :
+
+![](./screens/screen29.png)
+
+Both backend are reached with slightly more reach for `s1`. This is normal due to `s1` being the primary backend. 
+
+In this test, when a new request arrives at the load-balancer, it check if `s1` is available. If so, the request is routed to `s1`. If not, it check if `s2` is available. If so, the request is routed to `s2`. If not, the load-balancer wait until one backend is available.
+
+
+
+Test with JMeter with 250ms of delay on `s1` :
+
+![](./screens/screen30.png)
+
+Same thing here but since `s1` take more time to answer to requests, more requests are routed to `s2`.
+
+
+
 > 3. Compare the two strategies and conclude which is the best for this lab (not necessary the best at all).
 
-- **leastconn** : This method is well adapted to long session because the load-balancer adapt the routing by the loads of the session instead of the number of sessions. This way, if a backend get a very heavy/long session, he will get less session to compensate the load.
-- **first** : 
+- **leastconn** : This balance method is well adapted to long session because the load-balancer adapt the routing by the loads of the session instead of the number of sessions. This way, if a backend get a very heavy/long session, he will get less sessions to compensate the load. 
+- **first** : This balance method can be useful for budget infrastructure by allowing it to use only the minimum amount of backend server. These servers can be powered on and powered off depending on the load. However, as we learnt on this lab, it is necessary that the backend servers are able to serve multiple requests at the same time for this configuration to make sense.
+
+For this lab, **first** is definitely not suited (as explained before). **round-robin** is a good candidate that work very well with short request such as HTTP but does not take the delays into account.
+
+On the other hand, **leastconn** fit well with the addition of delays because it balance requests by the load of the sessions instead of the number. This means that **leastconn** is more effective than **round-robin** on delayed request
+
+On non-delayed requests, **leastconn** act just like **round-robin** and get the same performances.
+
+Overall, this make **leastconn** the best balancing method for this lab.
+
