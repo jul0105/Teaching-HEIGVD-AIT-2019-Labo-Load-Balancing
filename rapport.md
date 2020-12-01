@@ -331,7 +331,7 @@ Now that session are cleared between each request, the sticky session has no eff
 > 1. Briefly explain the strategies you have chosen and why you have chosen them.
 
 - **leastconn** : The load-balancer will route the request to the server that currently have the least number of connection. If multiple server have the same amount of connections, round-robin is performed to ensure that all servers will be used. This mode is particularly adapted with long session so this can be interesting to test with our backend using long delays.
-- **first** : 
+- **first** : The load-balancer select the first server with available connection slot based on the server's id or on the server's position on the farm. This mode is meant to be used with a *maxconn* value for each server (how many simultaneous sessions a server can handle). this way, all requests will be routed to the first server until it reach its *maxconn* value. Then, additional requests will be routed to another server while the first server is full. This mode is particularly adapted for budget intrastructure because it only use the minimum amout of backend. Additional servers can be powered on and off depending on the load. We choose this mode because he intrigued us and we wanted to test it to see if it is viable for a personal project.
 
 > 2. Provide evidence that you have played with the two strategies (configuration done, screenshots, ...)
 
